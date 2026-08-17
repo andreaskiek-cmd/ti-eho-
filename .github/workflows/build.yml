@@ -3,45 +3,81 @@ name: Build Android APK
 on:
   workflow_dispatch:
 
-env:
-  PYTHONFORANDROID_PREREQUISITES_INSTALL_INTERACTIVE: "0"
-
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Setup Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
+          python-version: "3.11"
 
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
+          distribution: temurin
           java-version: "17"
-          distribution: "temurin"
 
-      - name: Checkout
-        uses: actions/checkout@v7
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git \
+            zip \
+            unzip \
+            autoconf \
+            automake \
+            libtool \
+            pkg-config \
+            zlib1g-dev \
+            libncurses-dev \
+            cmake \
+            libffi-dev \
+            libssl-dev \
+            libltdl-dev
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+      - name: Accept Android licenses
+        run: |
+          yes | sdkmanager --licenses || true
 
       - name: Install Buildozer
         run: |
           python -m pip install --upgrade pip
-          pip install buildozer
+          pip install buildozer==1.6.0
 
-      - name: Install Linux dependencies
+      - name: Prepare Buildozer SDK
         run: |
-          sudo apt update
-          sudo apt -y install automake libltdl-dev
+          mkdir -p "$HOME/.buildozer/android/platform"
 
-      - name: Accept Android SDK license
+          rm -rf "$HOME/.buildozer/android/platform/android-sdk"
+
+          cp -a "$ANDROID_HOME" \
+            "$HOME/.buildozer/android/platform/android-sdk"
+
+      - name: Verify AIDL
         run: |
-          sed -i.bak "s/# android.accept_sdk_license = False/android.accept_sdk_license = True/" buildozer.spec
+          echo "Checking Android SDK..."
+          ls -la "$HOME/.buildozer/android/platform/android-sdk/build-tools/35.0.0/"
+          test -f "$HOME/.buildozer/android/platform/android-sdk/build-tools/35.0.0/aidl"
+          echo "AIDL FOUND"
 
       - name: Build APK
         run: |
-          buildozer android debug
+          buildozer -v android debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
