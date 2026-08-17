@@ -22,7 +22,21 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Install system dependencies
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK
+        run: |
+          sdkmanager --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          yes | sdkmanager --licenses || true
+
+      - name: Connect Android SDK to Buildozer
+        run: |
+          mkdir -p "$HOME/.buildozer/android/platform"
+          rm -rf "$HOME/.buildozer/android/platform/android-sdk"
+          ln -s "$ANDROID_HOME" "$HOME/.buildozer/android/platform/android-sdk"
+
+      - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -38,15 +52,6 @@ jobs:
             cmake \
             libffi-dev \
             libssl-dev
-
-      - name: Install Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android packages
-        run: |
-          sdkmanager "platform-tools"
-          sdkmanager "platforms;android-35"
-          sdkmanager "build-tools;35.0.0"
 
       - name: Install Buildozer
         run: |
