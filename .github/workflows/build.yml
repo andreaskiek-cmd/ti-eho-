@@ -52,6 +52,12 @@ jobs:
           sed -i 's/^requirements = .*/requirements = python3,kivy/' buildozer.spec
           sed -i 's/^orientation = .*/orientation = portrait/' buildozer.spec
 
+      - name: Install Android SDK components
+        run: |
+          SDKMANAGER=$(find "$HOME/.buildozer" -type f -name sdkmanager | head -n 1)
+          SDK_ROOT=$(dirname "$(dirname "$SDKMANAGER")")
+          yes | "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
       - name: Build APK
         run: |
           buildozer -v android debug
