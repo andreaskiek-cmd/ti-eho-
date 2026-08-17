@@ -20,9 +20,6 @@ android.minapi = 23
 
 android.permissions = INTERNET
 
-android.sdk_path = /usr/local/lib/android/sdk
-android.skip_update = True
-
 [buildozer]
 
 log_level = 2
