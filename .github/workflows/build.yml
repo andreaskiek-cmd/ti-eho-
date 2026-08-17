@@ -8,89 +8,64 @@ env:
 
 jobs:
   build:
-    name: Build Android APK
+    name: Build APK
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: "3.11"
 
       - name: Setup Java
         uses: actions/setup-java@v5
         with:
-          distribution: "temurin"
           java-version: "17"
+          distribution: "temurin"
+
+      - name: Checkout
+        uses: actions/checkout@v7
 
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            git \
-            zip \
-            unzip \
-            autoconf \
-            libtool \
-            pkg-config \
-            zlib1g-dev \
-            libncurses5-dev \
-            libncursesw5-dev \
-            libtinfo6 \
-            cmake \
-            libffi-dev \
-            libssl-dev \
-            automake \
-            autopoint \
-            gettext \
-            libltdl-dev
-
-      - name: Install Rust
-        run: |
-          curl https://sh.rustup.rs -sSf | sh -s -- -y
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          sudo apt-get install -y automake libltdl-dev
 
       - name: Install Buildozer
         run: |
           python -m pip install --upgrade pip
-          pip install buildozer
-          pip install setuptools
-          pip install cython==0.29.34
+          python -m pip install git+https://github.com/kivy/buildozer.git
+          python -m pip install legacy-cgi setuptools
+          python -m pip install cython==0.29.34
 
-      - name: Fix Android build configuration
+      - name: Prepare Buildozer
         run: |
           sed -i '/^[[:space:]]*android\.sdk_path[[:space:]]*=/d' buildozer.spec
-          sed -i 's/^[[:space:]]*android\.skip_update[[:space:]]*=.*/# android.skip_update = False/' buildozer.spec
+          sed -i '/^[[:space:]]*android\.ndk_path[[:space:]]=/d' buildozer.spec
+          sed -i '/^[[:space:]]*android\.skip_update[[:space:]]*=/d' buildozer.spec
 
-          if grep -q '^android\.api[[:space:]]*=' buildozer.spec; then
-            sed -i 's/^android\.api[[:space:]]*=.*/android.api = 35/' buildozer.spec
-          else
-            sed -i '/^\[app\]/a android.api = 35' buildozer.spec
-          fi
-
-          if grep -q '^android\.ndk[[:space:]]*=' buildozer.spec; then
-            sed -i 's/^android\.ndk[[:space:]]*=.*/android.ndk = 28c/' buildozer.spec
-          else
-            sed -i '/^\[app\]/a android.ndk = 28c' buildozer.spec
-          fi
-
-          if grep -q '^android\.accept_sdk_license[[:space:]]*=' buildozer.spec; then
-            sed -i 's/^android\.accept_sdk_license[[:space:]]*=.*/android.accept_sdk_license = True/' buildozer.spec
+          if grep -q '^android.accept_sdk_license' buildozer.spec; then
+            sed -i 's/^android.accept_sdk_license.*/android.accept_sdk_license = True/' buildozer.spec
           else
             sed -i '/^\[app\]/a android.accept_sdk_license = True' buildozer.spec
           fi
 
-          if grep -q '^p4a\.branch[[:space:]]*=' buildozer.spec; then
-            sed -i 's/^p4a\.branch[[:space:]]*=.*/p4a.branch = develop/' buildozer.spec
+          if grep -q '^p4a.branch' buildozer.spec; then
+            sed -i 's/^p4a.branch.*/p4a.branch = develop/' buildozer.spec
           else
             sed -i '/^\[app\]/a p4a.branch = develop' buildozer.spec
           fi
 
-          echo "===== FINAL BUILD CONFIG ====="
+          if ! grep -q '^android.ndk' buildozer.spec; then
+            sed -i '/^\[app\]/a android.ndk = 28c' buildozer.spec
+          fi
+
+          echo "===== BUILD CONFIG ====="
           cat buildozer.spec
+
+      - name: Download Android SDK, NDK and p4a
+        run: |
+          buildozer android p4a -- --help
 
       - name: Build APK
         run: |
@@ -100,6 +75,6 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: tieho-debug-apk
+          name: tieho-apk
           path: bin/*.apk
           if-no-files-found: error
