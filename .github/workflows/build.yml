@@ -2,6 +2,9 @@ name: Build Android APK
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
   build:
@@ -16,58 +19,60 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Setup Java 17
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            git \
-            zip \
-            unzip \
-            autoconf \
-            automake \
-            autopoint \
-            gettext \
-            libtool \
-            pkg-config \
-            zlib1g-dev \
-            libncurses5-dev \
-            libncursesw5-dev \
-            libtinfo6 \
-            cmake \
-            libffi-dev \
-            libssl-dev
-
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          packages: >-
+            platform-tools
+            platforms;android-35
+            build-tools;35.0.0
+            ndk;28.2.13676358
 
-      - name: Install Android SDK
+      - name: Fix old Buildozer sdkmanager path
         run: |
-          sdkmanager "platform-tools"
-          sdkmanager "platforms;android-35"
-          sdkmanager "build-tools;35.0.0"
+          SDK="$ANDROID_SDK_ROOT"
 
-      - name: Accept licenses
-        run: |
-          yes | sdkmanager --licenses || true
+          echo "ANDROID_SDK_ROOT=$SDK"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+
+          mkdir -p "$SDK/tools/bin"
+
+          if [ -x "$SDK/cmdline-tools/latest/bin/sdkmanager" ]; then
+            ln -sf "$SDK/cmdline-tools/latest/bin/sdkmanager" "$SDK/tools/bin/sdkmanager"
+          elif [ -x "$SDK/cmdline-tools/16.0/bin/sdkmanager" ]; then
+            ln -sf "$SDK/cmdline-tools/16.0/bin/sdkmanager" "$SDK/tools/bin/sdkmanager"
+          else
+            echo "ERROR: sdkmanager was not found"
+            find "$SDK" -name sdkmanager -type f -print
+            exit 1
+          fi
+
+          chmod +x "$SDK/tools/bin/sdkmanager"
+
+          "$SDK/tools/bin/sdkmanager" --version
+
+          yes | "$SDK/tools/bin/sdkmanager" --licenses >/dev/null || true
 
       - name: Install Buildozer
         run: |
           python -m pip install --upgrade pip
-          pip install buildozer
+          python -m pip install buildozer cython==0.29.37
 
       - name: Build APK
+        env:
+          P4A_RELEASE_QUIET: "1"
         run: |
           buildozer -v android debug
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: ti-eho-apk
+          name: tieho-apk
           path: bin/*.apk
-          if-no-files-found: error
