@@ -1,70 +1,72 @@
-name: Build Android APK
+name: Build TI EHO APK
 
 on:
   workflow_dispatch:
 
-env:
-  PYTHONFORANDROID_PREREQUISITES_INSTALL_INTERACTIVE: "0"
-
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Setup Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
+          python-version: "3.11"
 
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
-          java-version: "17"
           distribution: "temurin"
+          java-version: "17"
 
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Install Buildozer
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install buildozer
-
-      - name: Prepare Buildozer
-        run: |
-          sed -i '/^[[:space:]]*android\.sdk_path[[:space:]]*=/d' buildozer.spec
-          sed -i '/^[[:space:]]*android\.ndk_path[[:space:]]=/d' buildozer.spec
-          sed -i '/^[[:space:]]*android\.skip_update[[:space:]]=/d' buildozer.spec
-
-          if grep -q '^android.accept_sdk_license' buildozer.spec; then
-            sed -i 's/^android.accept_sdk_license.*/android.accept_sdk_license = True/' buildozer.spec
-          else
-            sed -i '/^\[app\]/a android.accept_sdk_license = True' buildozer.spec
-          fi
-
-          if grep -q '^p4a.branch' buildozer.spec; then
-            sed -i 's/^p4a.branch.*/p4a.branch = develop/' buildozer.spec
-          else
-            sed -i '/^\[app\]/a p4a.branch = develop' buildozer.spec
-          fi
-
-      - name: Install Linux dependencies
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y automake libltdl-dev
+          sudo apt-get install -y \
+            git \
+            zip \
+            unzip \
+            autoconf \
+            automake \
+            libtool \
+            pkg-config \
+            zlib1g-dev \
+            libncurses5 \
+            libncurses5-dev \
+            libffi-dev \
+            libssl-dev
 
-      - name: Download Android SDK NDK and p4a
+      - name: Install python-for-android
         run: |
-          buildozer android p4a -- --help
+          python -m pip install --upgrade pip
+          python -m pip install python-for-android
 
       - name: Build APK
         run: |
-          buildozer -v android debug
+          p4a apk \
+            --private . \
+            --package=org.tieho \
+            --name="TI EHO" \
+            --version=1.0 \
+            --numeric-version=1 \
+            --bootstrap=sdl2 \
+            --requirements=python3,kivy \
+            --arch=arm64-v8a \
+            --orientation=portrait \
+            --permission=INTERNET \
+            --debug
+
+      - name: Find APK
+        run: |
+          echo "APK files:"
+          find . -type f -name "*.apk" -print
 
       - name: Upload APK
-        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: tieho-apk
-          path: bin/*.apk
+          name: TI-EHO-APK
+          path: "**/*.apk"
           if-no-files-found: error
